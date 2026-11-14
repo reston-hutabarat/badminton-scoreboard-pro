@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0a0c0f"><link rel="apple-touch-icon" href="icon-192.png"><title>Badminton Scoreboard Pro</title>
+<style>
+:root{--bg:#0a0c0f;--fg:#fff;--card:#151a20;--ac:#39ff14;--mut:#8a94a0;--bd:#26303a;--red:#ff4d4d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme=light]{--bg:#f2f5f7;--fg:#0a0c0f;--card:#fff;--ac:#0f9d00;--mut:#5d6873;--bd:#d6dde3}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:720px;margin:0 auto;padding:12px 14px 30px}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;font-weight:700;cursor:pointer}
+button.pr{background:var(--ac);color:#000;border:0}
+button.dg{color:var(--red)}
+input,select{width:100%;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:4px 0 10px}
+.logo{font-weight:900;font-size:26px;letter-spacing:1px;text-align:center;margin:18px 0 4px}.logo i{color:var(--ac);font-style:normal}
+.sub{text-align:center;color:var(--mut);margin-bottom:20px}
+.menu{display:grid;gap:12px}.menu button{text-align:left;font-size:18px;padding:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.top button{padding:8px 14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:10px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.panel{border-radius:20px;padding:14px;margin-bottom:10px;background:var(--card);border:2px solid var(--bd);user-select:none;cursor:pointer}
+.panel.srv{border-color:var(--ac)}
+.panel.cs .mut{color:inherit;opacity:.75}
+#aud .t.cs{border-radius:3vmin;padding:2vmin 4vmin}
+#aud .t.cs .s{color:inherit}
+.panel .nm{font-weight:800;font-size:20px}
+.panel .sc{font-size:min(30vw,150px);font-weight:900;line-height:1;text-align:center;margin:6px 0}
+.panel.pop .sc{animation:pop .25s}
+@keyframes pop{50%{transform:scale(1.15);color:var(--ac)}}
+.chip{display:inline-block;padding:4px 9px;border-radius:99px;border:1px solid var(--bd);font-size:13px;margin:2px 4px 2px 0}
+.chip.s{background:var(--ac);color:#000;border-color:var(--ac);font-weight:800}.chip.r{border-color:var(--fg)}
+.plus{display:block;text-align:center;background:var(--ac);color:#000;border-radius:12px;padding:14px;font-weight:900;font-size:18px}
+.alert{background:var(--ac);color:#000;font-weight:900;text-align:center;border-radius:12px;padding:10px;margin-bottom:10px}
+.mut{color:var(--mut);font-size:14px}.big{font-size:20px;font-weight:800}
+.seg{display:flex;gap:6px;margin-bottom:10px}.seg button{flex:1;padding:12px}.seg .on{background:var(--ac);color:#000;border:0}
+#aud{position:fixed;inset:0;background:#000;color:#fff;display:none;flex-direction:column;z-index:9;padding:3vmin;justify-content:space-around}
+#aud .t{display:flex;align-items:center;justify-content:space-between;gap:2vmin;flex:1}
+#aud .n{font-size:min(6vw,6vh);font-weight:800;flex:1}
+#aud .s{font-size:min(26vw,30vh);font-weight:900;color:#39ff14;line-height:1}
+#aud .x{position:absolute;top:6px;right:10px;opacity:.25;background:none;border:0;color:#fff;font-size:22px}
+@media (orientation:portrait){#aud .t{flex-direction:column;text-align:center}}
+</style></head><body>
+<div id="app"></div><div id="aud"></div>
+<script>
+/* ============ KONFIGURASI ============ */
+const DEV={name:"Reston Hutabarat",contact:"Developer Badminton Scoreboard Pro",ver:"1.0.0"};
+const L={id:{newm:"NEW MATCH",hist:"MATCH HISTORY",pl:"PLAYER MANAGEMENT",live:"LIVE SCORE",set:"SETTINGS",about:"ABOUT",game:"Game",undo:"UNDO",reset:"RESET GAME",end:"END MATCH",start:"START MATCH",save:"Simpan",del:"Hapus",back:"Kembali",winner:"Pemenang",srv:"SERVER",rcv:"RECEIVER",chg:"GANTI SISI LAPANGAN"},
+en:{newm:"NEW MATCH",hist:"MATCH HISTORY",pl:"PLAYER MANAGEMENT",live:"LIVE SCORE",set:"SETTINGS",about:"ABOUT",game:"Game",undo:"UNDO",reset:"RESET GAME",end:"END MATCH",start:"START MATCH",save:"Save",del:"Delete",back:"Back",winner:"Winner",srv:"SERVER",rcv:"RECEIVER",chg:"CHANGE COURT SIDES"}};
+const t=k=>(L[S.settings.lang]||L.id)[k]||k;
+
+/* ============ MESIN SKOR & SERVIS (murni, tanpa DOM) ============ */
+// pos[t]=[indeksPemainDiKanan, indeksPemainDiKiri]; side 0=kanan (skor genap), 1=kiri (skor ganjil)
+const need=m=>(m.best+1)/2;
+const wins=m=>[0,1].map(i=>m.games.filter(g=>g[i]>g[1-i]).length);
+const inf=m=>{const g=m.g,s=g.srv,r=1-s,side=g.sc[s]%2,D=m.type=='D';return{s,r,side,si:D?g.pos[s][side]:0,ri:D?g.pos[r][side]:0}};
+const snap=m=>{const{u,log,...r}=m;return JSON.stringify(r)};
+const mkGame=(m,first,pos)=>{m.g={sc:[0,0],srv:first,pos:pos};m.gs=JSON.stringify(m.g);m.gf=m.flip;m.mid=false};
+const T=m=>m.tgt||21,C=m=>m.cap||(T(m)==21?30:51);
+const gameWon=(m,a,b)=>(a>=T(m)&&a-b>=2)||a==C(m);
+function point(m,t){
+ m.u.push(snap(m));m.alert=null;
+ const g=m.g,i=inf(m);
+ m.log.push({t,gi:m.gi,sc:[...g.sc],srv:g.srv,si:i.si});
+ if(g.srv==t){ if(m.type=='D') g.pos[t]=[g.pos[t][1],g.pos[t][0]]; } // server menang: bertukar dengan pasangan, server sama
+ else g.srv=t;                                                      // receiver menang: hak servis pindah, posisi tidak berubah
+ g.sc[t]++;
+ const a=g.sc[t],b=g.sc[1-t];
+ if(gameWon(m,a,b)){
+  m.games.push([...g.sc]);m.gi++;
+  if(wins(m)[t]>=need(m)){m.status='FINISHED';m.end=Date.now();m.winner=t;m.alert='MATCH';return}
+  m.flip=!m.flip;m.alert='GAME';
+  mkGame(m,t,[[...g.pos[0]],[...g.pos[1]]]);m.alert='GAME';
+ }else if(m.gi==m.best-1&&!m.mid&&Math.max(...g.sc)==(T(m)==21?11:21)){m.mid=true;m.flip=!m.flip;m.alert='SIDE'}
+}
+function undo(m){if(!m.u.length)return false;const s=m.u.pop(),u=m.u,log=m.log;log.pop();Object.keys(m).forEach(k=>delete m[k]);Object.assign(m,JSON.parse(s),{u,log});return true}
+function gp(m,t){const a=m.g.sc[t],b=m.g.sc[1-t];return (a>=T(m)-1&&a-b>=1)||a==C(m)-1}
+function mp(m,t){return gp(m,t)&&wins(m)[t]+1>=need(m)}
+
+/* ============ STATE & PENYIMPANAN ============ */
+const def={settings:{lang:'id',theme:'dark',voice:true,vlang:'id',vol:1,vnames:false,vundo:false,best:3},players:[],history:[],cur:null,last:null};
+let S;try{S=JSON.parse(localStorage.getItem('bsp'))||def}catch(e){S=def}
+S.settings=Object.assign({},def.settings,S.settings);
+const save=()=>{try{localStorage.setItem('bsp',JSON.stringify(S))}catch(e){}};
+let view=S.cur&&S.cur.status=='LIVE'?'board':'home',aud=false,nm=null,hq='',hdesc=true,sel=null,wl=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tn=(m,i)=>m.names[i].slice(0,m.type=='D'?2:1).map(esc).join(' / ');
+const tnRaw=(m,i)=>m.names[i].slice(0,m.type=='D'?2:1).join(' & ');
+const dur=m=>{const s=Math.round(((m.end||Date.now())-m.start)/1000);return Math.floor(s/60)+" mnt "+s%60+" dtk"};
+const go=v=>{view=v;render()};
+
+/* ============ SUARA ============ */
+function say(txt){const o=S.settings;if(!o.voice||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(txt);u.lang=o.vlang=='id'?'id-ID':'en-US';u.volume=o.vol;speechSynthesis.speak(u)}catch(e){}}
+function announce(m,corr){
+ const id=S.settings.vlang=='id',n=i=>S.settings.vnames?tnRaw(m,i):(id?'Tim ':'Team ')+'AB'[i];
+ if(m.status=='FINISHED'){return say(n(m.winner)+(id?' memenangkan pertandingan':' wins the match'))}
+ let p=[];
+ if(m.alert=='GAME'){const g=m.games[m.games.length-1],w=g[0]>g[1]?0:1;p.push(n(w)+(id?' memenangkan game':' wins the game'),g[w]+' '+g[1-w]);}
+ else{const s=m.g.srv;p.push(m.g.sc[s]+' '+m.g.sc[1-s]);
+  [0,1].forEach(i=>{if(mp(m,i))p.push((id?'Match point ':'Match point ')+(S.settings.vnames?n(i):''));else if(gp(m,i))p.push((id?'Game point ':'Game point ')+(S.settings.vnames?n(i):''))});
+  if(m.alert=='SIDE')p.push(id?'Pergantian sisi lapangan':'Change court sides')}
+ if(m.alert=='GAME'&&m.flip!=undefined)p.push(id?'Pergantian sisi lapangan':'Change court sides');
+ say((corr?(id?'Koreksi. ':'Correction. '):'')+p.join('. '));
+}
+
+/* ============ AKSI ============ */
+function startMatch(){
+ const D=nm.type=='D',n=nm.n.map((x,i)=>x.trim()||['Player A1','Player A2','Player B1','Player B2'][i]);
+ const m={id:Date.now(),type:nm.type,names:[[n[0],D?n[1]:''],[n[2],D?n[3]:'']],best:nm.best,tgt:nm.tgt,cap:nm.tgt==21?30:51,games:[],gi:0,flip:false,status:'LIVE',start:Date.now(),log:[],u:[],alert:null};
+ const pos=[0,1].map(i=>nm.right[i]==0?[0,1]:[1,0]);
+ mkGame(m,nm.srv,pos);S.cur=m;
+ n.forEach(x=>{if(!S.players.find(p=>p.n.toLowerCase()==x.toLowerCase())&&!/^Player [AB]\d$/.test(x))S.players.push({id:Math.random(),n:x})});
+ save();view='board';render();say(S.settings.vlang=='id'?'Pertandingan dimulai':'Play');
+}
+function pt(i){const m=S.cur;if(!m||m.status!='LIVE')return;point(m,i);
+ if(m.status=='FINISHED')finish();else save();
+ render();announce(m);const e=document.querySelector('.panel[data-i="'+i+'"]');if(e){e.classList.add('pop')}}
+function finish(){const m=S.cur,h=JSON.parse(JSON.stringify(m));delete h.u;S.history.unshift(h);S.last=h;S.cur=null;save();view='result'}
+function doUndo(){const m=S.cur;if(m&&undo(m)){save();render();if(S.settings.vundo)announce(m,true)}}
+function doReset(){if(!confirm('Reset game ini ke 0-0?'))return;const m=S.cur;m.u.push(snap(m));m.log=m.log.filter(r=>r.gi!=m.gi);m.g=JSON.parse(m.gs);m.flip=m.gf;m.mid=false;m.alert=null;save();render()}
+function doEnd(){if(!confirm('Akhiri pertandingan sekarang? Hasil disimpan sebagai belum selesai.'))return;const m=S.cur;m.status='ENDED';m.end=Date.now();m.winner=null;finish();render()}
+async function shareTxt(m){const w=m.winner==null?'-':tnRaw(m,m.winner);const txt='🏸 '+tnRaw(m,0)+' vs '+tnRaw(m,1)+'\n'+m.games.map(g=>g.join('-')).join(', ')+'\nPemenang: '+w+'\n'+new Date(m.start).toLocaleDateString();
+ try{if(navigator.share)await navigator.share({text:txt});else{await navigator.clipboard.writeText(txt);alert('Disalin ke clipboard')}}catch(e){}}
+async function openAud(){aud=true;render();try{await document.documentElement.requestFullscreen();}catch(e){}try{wl=await navigator.wakeLock.request('screen')}catch(e){}}
+function closeAud(){aud=false;render();try{document.exitFullscreen()}catch(e){}try{wl&&wl.release()}catch(e){}}
+
+/* ============ VIEW ============ */
+const V={};
+V.home=()=>`<div class=logo>🏸 BADMINTON <i>SCOREBOARD</i> PRO</div><div class=sub>BWF rally point • offline</div><div class=menu>
+${S.cur?`<button class=pr onclick="go('board')">▶ LANJUTKAN PERTANDINGAN</button>`:''}
+<button onclick="newForm()">🏸 ${t('newm')}</button><button onclick="go('hist')">📜 ${t('hist')}</button><button onclick="go('players')">👥 ${t('pl')}</button><button onclick="go('live')">📡 ${t('live')}</button><button onclick="go('set')">⚙️ ${t('set')}</button><button onclick="go('about')">ℹ️ ${t('about')}</button></div>`;
+const bar=(ti,b='home')=>`<div class=top><button onclick="go('${b}')">←</button><b>${ti}</b><span></span></div>`;
+function newForm(){nm={type:'S',n:['','','',''],srv:0,right:[0,0],best:S.settings.best,tgt:21};go('new')}
+V.new=()=>{const D=nm.type=='D',dl='<datalist id=pl>'+S.players.map(p=>`<option value="${esc(p.n)}">`).join('')+'</datalist>';
+ const inp=(i,lab)=>`<label class=mut>${lab}</label><input list=pl value="${esc(nm.n[i])}" oninput="nm.n[${i}]=this.value" placeholder="${lab}">`;
+ return bar(t('newm'))+dl+`<div class=seg><button class="${!D?'on':''}" onclick="nm.type='S';render()">SINGLES</button><button class="${D?'on':''}" onclick="nm.type='D';render()">DOUBLES</button></div>
+<div class=card><b>TEAM A</b>${inp(0,D?'Pemain A1':'Pemain A')}${D?inp(1,'Pemain A2'):''}${D?`<label class=mut>Pemain di sisi KANAN saat awal</label><select onchange="nm.right[0]=+this.value"><option value=0 ${nm.right[0]==0?'selected':''}>A1</option><option value=1 ${nm.right[0]==1?'selected':''}>A2</option></select>`:''}</div>
+<div class=card><b>TEAM B</b>${inp(2,D?'Pemain B1':'Pemain B')}${D?inp(3,'Pemain B2'):''}${D?`<label class=mut>Pemain di sisi KANAN saat awal</label><select onchange="nm.right[1]=+this.value"><option value=0 ${nm.right[1]==0?'selected':''}>B1</option><option value=1 ${nm.right[1]==1?'selected':''}>B2</option></select>`:''}</div>
+<div class=card><label class=mut>Servis pertama (dari sisi kanan)</label><select onchange="nm.srv=+this.value"><option value=0 ${nm.srv==0?'selected':''}>Team A</option><option value=1 ${nm.srv==1?'selected':''}>Team B</option></select>
+<label class=mut>Format</label><select onchange="nm.best=+this.value"><option value=1 ${nm.best==1?'selected':''}>Best of 1</option><option value=3 ${nm.best==3?'selected':''}>Best of 3</option><option value=5 ${nm.best==5?'selected':''}>Best of 5</option></select><label class=mut>Target skor game</label><select onchange="nm.tgt=+this.value;render()"><option value=21 ${nm.tgt==21?'selected':''}>21 poin (selisih 2, maks 30)</option><option value=42 ${nm.tgt==42?'selected':''}>42 poin (selisih 2, maks 51)</option></select></div>
+<button class="pr" style="width:100%;font-size:18px" onclick="startMatch()">${t('start')}</button>`};
+function panel(m,i){
+ const f=inf(m),D=m.type=='D',g=m.g,isS=f.s==i;
+ const pls=(D?[0,1]:[0]).map(p=>{const side=D?g.pos[i].indexOf(p):f.side;const s=isS&&p==f.si,r=f.r==i&&p==f.ri;
+  return `<span class="chip ${s?'s':r?'r':''}">${D?(side?'L':'R')+' • ':''}${esc(m.names[i][p])}${s?' 🏸 '+t('srv'):''}${r?' '+t('rcv'):''}</span>`}).join('');
+ return `<div class="panel ${isS?'srv':''} ${(S.settings.pc||[])[i]?'cs':''}" ${pst(i)} data-i=${i} onclick="pt(${i})"><div class=nm>${tn(m,i)} <span class=mut>(${'AB'[i]})</span></div><div>${pls}</div>
+ ${isS?`<div class=mut>🏸 SERVICE ${f.side?'LEFT (kiri)':'RIGHT (kanan)'}</div>`:'<div class=mut>&nbsp;</div>'}
+ <div class=sc>${g.sc[i]}</div><span class=plus>+1 POINT</span></div>`}
+V.board=()=>{const m=S.cur;if(!m)return V.home();const o=m.flip?[1,0]:[0,1],w=wins(m);
+ const al=m.alert=='SIDE'||m.alert=='GAME'?`<div class=alert>${t('chg')}${m.alert=='GAME'?' • GAME '+(m.gi+1):''}</div>`:'';
+ const st=mp(m,0)||mp(m,1)?'MATCH POINT':gp(m,0)||gp(m,1)?'GAME POINT':'LIVE';
+ return `<div class=top><button onclick="go('home')">←</button><b>${t('game')} ${m.gi+1}/${m.best} • ${st}</b><span style="display:flex;gap:6px"><label class=mut style="font-size:10px;text-align:center">Latar<input type=color value="${S.settings.bg||'#0a0c0f'}" oninput="setBg(this.value)" style="width:44px;height:34px;padding:2px;margin:0;display:block"></label><label class=mut style="font-size:10px;text-align:center">Skor A<input type=color value="${(S.settings.pc||[])[0]||'#151a20'}" oninput="setPbg(0,this.value)" style="width:44px;height:34px;padding:2px;margin:0;display:block"></label><label class=mut style="font-size:10px;text-align:center">Skor B<input type=color value="${(S.settings.pc||[])[1]||'#151a20'}" oninput="setPbg(1,this.value)" style="width:44px;height:34px;padding:2px;margin:0;display:block"></label><button onclick="openAud()">📺</button></span></div>
+ <div class=mut style="text-align:center;margin-bottom:8px">Game: ${w[0]}-${w[1]} ${m.games.length?'• '+m.games.map(g=>g.join('-')).join(', '):''}</div>${al}
+ ${o.map(i=>panel(m,i)).join('')}
+ <div class=row><button onclick="doUndo()" ${m.u.length?'':'disabled'}>↩ ${t('undo')}</button><button class=dg onclick="doReset()">${t('reset')}</button><button class=dg onclick="doEnd()">${t('end')}</button></div>
+ <div class="card mut" style="margin-top:10px">Rally: ${m.log.length} • ${m.log.slice(-6).reverse().map(r=>'<b>'+'AB'[r.t]+'</b> ('+r.sc.join('-')+')').join(' ← ')}</div>`};
+function audHTML(){const m=S.cur||S.last;if(!m)return '';const o=m.flip?[1,0]:[0,1],f=m.g?inf(m):{s:-1};const fin=m.status!='LIVE';
+ return `<button class=x onclick="closeAud()">✕</button><div class=mut style="text-align:center;font-size:3vmin;color:#aaa">${fin?'FINISHED':'GAME '+(m.gi+1)+' • LIVE'} • ${m.games.map(g=>g.join('-')).join('  ')}</div>
+ ${o.map(i=>`<div class="t ${(S.settings.pc||[])[i]?'cs':''}" ${pst(i)} data-i=${i}><div class=n>${!fin&&f.s==i?'🏸 ':''}${tn(m,i)}${fin&&m.winner==i?' 🏆':''}</div><div class=s>${fin?m.games.filter(g=>g[i]>g[1-i]).length:m.g.sc[i]}</div></div>`).join('')}`}
+V.result=()=>{const m=S.last,w=m.winner==null?'-':tn(m,m.winner),tot=[0,1].map(i=>m.games.reduce((a,g)=>a+g[i],0));
+ return `<div class=logo>🏆 ${t('winner')}</div><div class=card style="text-align:center"><div class=big>${w}</div><div class=mut>${tn(m,0)} vs ${tn(m,1)}</div>
+ <div class=big style="margin:12px 0">${m.games.map(g=>g.join('-')).join(' &nbsp; ')}</div><div class=mut>Total poin: ${tot[0]} - ${tot[1]} • Durasi: ${dur(m)} • ${new Date(m.start).toLocaleString()}</div><div style="color:var(--ac);margin-top:8px">✔ Tersimpan otomatis</div></div>
+ <div class=row><button onclick="shareTxt(S.last)">SHARE RESULT</button><button onclick="openAud()">📺 Tampilkan</button></div><div class=row style="margin-top:8px"><button class=pr onclick="newForm()">NEW MATCH</button><button onclick="go('home')">BACK TO HOME</button></div>`};
+const hList=()=>{let h=S.history.filter(m=>(tnRaw(m,0)+tnRaw(m,1)).toLowerCase().includes(hq.toLowerCase()));h.sort((a,b)=>hdesc?b.start-a.start:a.start-b.start);
+ return h.map(m=>`<div class=card onclick="sel=${m.id};go('det')"><b>${tn(m,0)}</b> vs <b>${tn(m,1)}</b><div class=mut>${m.type=='D'?'Doubles':'Singles'} • ${new Date(m.start).toLocaleDateString()} • ${m.games.map(g=>g.join('-')).join(', ')||'-'}</div><div>🏆 ${m.winner==null?'(belum selesai)':tn(m,m.winner)}</div></div>`).join('')||'<div class=mut>Belum ada pertandingan.</div>'};
+V.hist=()=>bar(t('hist'))+`<div class=row><input placeholder="Cari..." value="${esc(hq)}" oninput="hq=this.value;$('#hl').innerHTML=hList()"><button style="flex:0 0 90px;margin:4px 0 10px" onclick="hdesc=!hdesc;render()">${hdesc?'Baru ↓':'Lama ↑'}</button></div><div id=hl>${hList()}</div>`;
+V.det=()=>{const m=S.history.find(x=>x.id==sel);if(!m)return V.hist();
+ return bar('Detail','hist')+`<div class=card><div class=big>${tn(m,0)} vs ${tn(m,1)}</div><div class=mut>${m.type=='D'?'Doubles':'Singles'} • Best of ${m.best} • ${new Date(m.start).toLocaleString()} • ${dur(m)}</div>
+ ${m.games.map((g,i)=>`<div>Game ${i+1}: <b>${g[0]} - ${g[1]}</b></div>`).join('')}<div>🏆 ${m.winner==null?'-':tn(m,m.winner)}</div><div class=mut>Rally tercatat: ${m.log.length}</div></div>
+ <div class=row><button onclick="shareTxt(S.history.find(x=>x.id==sel))">SHARE</button><button class=dg onclick="if(confirm('Hapus?')){S.history=S.history.filter(x=>x.id!=sel);save();go('hist')}">${t('del')}</button></div>`};
+const stat=n=>{let p=0,w=0;S.history.forEach(m=>[0,1].forEach(i=>{if(m.names[i].slice(0,m.type=='D'?2:1).includes(n)){p++;if(m.winner===i)w++}}));return[p,w]};
+let pq='';
+const pList=()=>S.players.filter(p=>p.n.toLowerCase().includes(pq.toLowerCase())).map(p=>{const[a,b]=stat(p.n);return `<div class="card row" style="align-items:center"><div><b>${esc(p.n)}</b><div class=mut>${a} main • ${b} menang</div></div><button style="flex:0 0 auto" onclick="editP(${p.id})">✎</button><button class=dg style="flex:0 0 auto" onclick="delP(${p.id})">🗑</button></div>`}).join('')||'<div class=mut>Belum ada pemain.</div>';
+V.players=()=>bar(t('pl'))+`<div class=row><input id=np placeholder="Nama pemain baru"><button class=pr style="flex:0 0 90px;margin:4px 0 10px" onclick="addP()">Tambah</button></div><input placeholder="Cari..." oninput="pq=this.value;$('#pl2').innerHTML=pList()"><div id=pl2>${pList()}</div>`;
+function addP(){const v=$('#np').value.trim();if(v&&!S.players.find(p=>p.n.toLowerCase()==v.toLowerCase())){S.players.push({id:Math.random(),n:v});save()}render()}
+function editP(id){const p=S.players.find(x=>x.id==id),v=prompt('Edit nama',p.n);if(v&&v.trim()){p.n=v.trim();save();render()}}
+function delP(id){if(confirm('Hapus pemain?')){S.players=S.players.filter(p=>p.id!=id);save();render()}}
+V.live=()=>bar(t('live'))+`<div class=card><b>Status</b><div class=mut>Live Score lintas perangkat (QR Code, sinkronisasi Wi-Fi/internet) memerlukan server real-time (Firebase/Supabase) dan belum termasuk di versi ini.</div></div>
+<div class=card><b>Court Display / Audience Mode</b><div class=mut>Layar penuh, angka besar, layar tidak mati, landscape &amp; portrait. Bisa di-mirror/cast dari perangkat ini ke TV.</div><br>${S.cur||S.last?`<button class=pr style="width:100%" onclick="openAud()">📺 BUKA AUDIENCE MODE</button>`:'<div class=mut>Mulai pertandingan dulu.</div>'}</div>`;
+V.set=()=>{const o=S.settings,sl=(k,opts)=>`<select onchange="S.settings.${k}=this.value;save();render()">${opts.map(([v,l])=>`<option value="${v}" ${o[k]==v?'selected':''}>${l}</option>`).join('')}</select>`;
+ return bar(t('set'))+`<div class=card><label class=mut>Warna latar pertandingan &amp; Audience Mode</label><div class=row><input type=color value="${o.bg||'#0a0c0f'}" oninput="setBg(this.value)" style="height:48px"><button style="margin:4px 0 10px" onclick="S.settings.bg=null;save();render()">Reset warna</button></div><label class=mut>Warna kotak skor Team A &amp; Team B</label><div class=row><input type=color value="${(o.pc||[])[0]||'#151a20'}" oninput="setPbg(0,this.value)" style="height:48px"><input type=color value="${(o.pc||[])[1]||'#151a20'}" oninput="setPbg(1,this.value)" style="height:48px"></div><button style="margin:0 0 10px;width:100%" onclick="resetPbg()">Reset warna skor</button><label class=mut>Tema</label>${sl('theme',[['dark','Gelap'],['light','Terang']])}<label class=mut>Bahasa aplikasi</label>${sl('lang',[['id','Indonesia'],['en','English']])}<label class=mut>Format default</label><select onchange="S.settings.best=+this.value;save()">${[1,3,5].map(b=>`<option ${o.best==b?'selected':''} value=${b}>Best of ${b}</option>`).join('')}</select></div>
+ <div class=card><label class=mut>Voice Announcement</label>${sl('voice',[[true,'ON'],[false,'OFF']].map(([v,l])=>[v,l]))}<label class=mut>Bahasa suara</label>${sl('vlang',[['id','Indonesia'],['en','English']])}<label class=mut>Volume</label><input type=range min=0 max=1 step=.1 value="${o.vol}" oninput="S.settings.vol=+this.value;save()">
+ <label class=mut>Isi pengumuman</label><select onchange="S.settings.vnames=this.value=='1';save()"><option value=0 ${!o.vnames?'selected':''}>Skor saja</option><option value=1 ${o.vnames?'selected':''}>Skor + nama</option></select><label class=mut>Umumkan koreksi saat UNDO</label><select onchange="S.settings.vundo=this.value=='1';save()"><option value=0 ${!o.vundo?'selected':''}>Tidak</option><option value=1 ${o.vundo?'selected':''}>Ya</option></select><button onclick="say('Sixteen, twelve')">Tes suara</button></div>
+ <div class=card><div class=mut>Penyimpanan: lokal di perangkat (${S.history.length} pertandingan, ${S.players.length} pemain)</div><br><button onclick="selfTest()">Jalankan self-test mesin skor</button> <button class=dg onclick="if(confirm('Hapus SEMUA data?')){localStorage.removeItem('bsp');location.reload()}">Hapus semua data</button></div>`};
+V.about=()=>bar(t('about'))+`<div class=card style="text-align:center"><div class=logo>🏸 BADMINTON <i>SCOREBOARD</i> PRO</div><div class=mut>Versi ${DEV.ver}</div><br><div class=big>Developer</div><div>${esc(DEV.name)}</div><div class=mut>${esc(DEV.contact)}</div></div>`;
+
+function setBg(c){S.settings.bg=c;save();paintBg()}
+function ink(c){const n=parseInt(c.slice(1),16),r=n>>16,g=n>>8&255,b=n&255;return (r*299+g*587+b*114)/1000>140?'#000':'#fff'}
+function pst(i){const c=(S.settings.pc||[])[i];return c?`style="background:${c};color:${ink(c)}"`:''}
+function setPbg(i,c){S.settings.pc=S.settings.pc||[null,null];S.settings.pc[i]=c;save();document.querySelectorAll('[data-i="'+i+'"]').forEach(e=>{e.style.background=c;e.style.color=ink(c);e.classList.add('cs')})}
+function resetPbg(){S.settings.pc=[null,null];save();render()}
+function paintBg(){const c=S.settings.bg;document.body.style.background=view=='board'&&c?c:'';$('#aud').style.background=c||'#000'}
+function render(){document.documentElement.dataset.theme=S.settings.theme;$('#app').innerHTML=(V[view]||V.home)();const a=$('#aud');a.style.display=aud?'flex':'none';a.innerHTML=aud?audHTML():'';paintBg()}
+
+/* ============ SELF-TEST ============ */
+function selfTest(){const r=[],ok=(c,n)=>r.push((c?'✔ ':'✘ ')+n);
+ const mk=(type,best=3,srv=0,right=[0,0])=>{const m={type,names:[['A1','A2'],['B1','B2']],best,games:[],gi:0,flip:false,log:[],u:[],status:'LIVE'};mkGame(m,srv,right.map(x=>x?[1,0]:[0,1]));return m};
+ let m=mk('S');for(let i=0;i<20;i++){point(m,0);point(m,1)}ok(m.g.sc.join()=='20,20'&&!m.games.length,'S 20-20 lanjut');point(m,0);ok(!m.games.length,'S 21-20 belum menang');point(m,0);ok(m.games.length==1&&m.gi==1,'S 22-20 game selesai');
+ m=mk('S');for(let i=0;i<29;i++){point(m,0);point(m,1)}point(m,1);ok(m.games.length==1&&m.games[0].join()=='29,30','S 30-29 menang');
+ m=mk('S');point(m,0);ok(inf(m).side==1&&m.g.srv==0,'S server menang: tetap servis dari kiri (1)');point(m,1);ok(m.g.srv==1&&inf(m).side==1,'S receiver menang: hak servis pindah (skor 1)');
+ m=mk('D');let f=inf(m);ok(f.s==0&&f.si==0&&f.ri==0,'D server awal A1 kanan, receiver B1');
+ point(m,0);f=inf(m);ok(f.s==0&&f.si==0&&f.side==1&&m.g.pos[0].join()=='1,0','D A menang: A1 tetap server dari kiri, A1&A2 bertukar');
+ point(m,1);f=inf(m);ok(f.s==1&&m.g.sc.join()=='1,1'&&m.g.pos[1].join()=='0,1'&&f.si==1,'D B menang: hak servis pindah, B tidak bertukar, skor B ganjil → server B kiri (B2)');
+ point(m,1);f=inf(m);ok(f.si==1&&f.side==0&&m.g.pos[1].join()=='1,0'&&f.si==1,'D B menang lagi: bertukar, skor 2 → B2 servis dari kanan');
+ const c=JSON.stringify(m.g);point(m,0);undo(m);ok(JSON.stringify(m.g)==c,'Undo memulihkan semua state');
+ m=mk('S',3);for(let i=0;i<21;i++)point(m,0);for(let i=0;i<21;i++)point(m,0);ok(m.status=='FINISHED'&&m.winner==0,'Match best-of-3 selesai 2 game');
+ m=mk('S',3);for(let i=0;i<21;i++)point(m,0);ok(m.flip,'Ganti sisi setelah game 1');for(let i=0;i<21;i++)point(m,1);ok(!m.flip,'Ganti sisi setelah game 2');for(let i=0;i<11;i++)point(m,0);ok(m.flip&&m.alert=='SIDE','Game 3: ganti sisi di 11');
+ alert(r.join('\n'));}
+
+render();
+if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
